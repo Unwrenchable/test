@@ -23,7 +23,16 @@ const {
 } = require('@solana/spl-token');
 const { Metaplex } = require('@metaplex-foundation/js');
 
-// === Narrative Loader (minimal working version) ===
+// === Narrative Loader – Moved to server-side (create this file in root) ===
+function safeJsonRead(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (e) {
+    console.error('JSON load error:', filePath, e);
+    return [];
+  }
+}
+
 function loadNarrative(dataDir) {
   const narrative = {
     main: safeJsonRead(path.join(dataDir, 'narrative_main.json')),
@@ -42,15 +51,6 @@ function loadNarrative(dataDir) {
     });
 
   return narrative;
-}
-
-function safeJsonRead(filePath) {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch (e) {
-    console.error('JSON load error:', filePath, e);
-    return [];
-  }
 }
 
 process.on('unhandledRejection', (r) => console.warn('Unhandled Rejection:', r));
@@ -91,7 +91,7 @@ const app = express();
 
 app.use(morgan('combined'));
 
-// Helmet with relaxed CSP for media, scripts, etc.
+// Helmet CSP – relaxed for media (fixes CodePen audio errors)
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -102,7 +102,7 @@ app.use(
         imgSrc: ["'self'", "data:", "https:"],
         connectSrc: ["'self'", SOLANA_RPC, "wss:", "https://unpkg.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-        mediaSrc: ["'self'", "https://assets.codepen.io"], // ← Fixed audio from CodePen
+        mediaSrc: ["'self'", "https://assets.codepen.io"], // ← FIXES AUDIO BLOCKS
         objectSrc: ["'none'"],
         upgradeInsecureRequests: [],
       },
@@ -128,6 +128,7 @@ app.get('/locations', (req, res) => res.json(LOCATIONS));
 app.get('/quests', (req, res) => res.json(QUESTS.length ? QUESTS : []));
 app.get('/mintables', (req, res) => res.json(MINTABLES.length ? MINTABLES : []));
 
+// Player data (GET)
 app.get('/player/:addr', async (req, res) => {
   const { addr } = req.params;
   try {
@@ -136,16 +137,7 @@ app.get('/player/:addr', async (req, res) => {
     return res.status(400).json({ error: 'Invalid address' });
   }
 
-  let playerData = {
-    lvl: 1,
-    hp: 100,
-    caps: 0,
-    gear: [],
-    found: [],
-    xp: 0,
-    xpToNext: 100,
-    rads: 0,
-  };
+  let playerData = { lvl: 1, hp: 100, caps: 0, gear: [], found: [], xp: 0, xpToNext: 100, rads: 0 };
 
   const redisData = await redis.get(`player:${addr}`);
   if (redisData) playerData = JSON.parse(redisData);
@@ -153,50 +145,31 @@ app.get('/player/:addr', async (req, res) => {
   try {
     const nfts = await metaplex.nfts().findAllByOwner({ owner: new PublicKey(addr) });
     const gear = nfts
-      .filter((nft) => nft.json?.attributes)
-      .map((nft) => {
-        const powerAttr = nft.json.attributes.find((a) => a.trait_type === 'Power');
-        const rarityAttr = nft.json.attributes.find((a) => a.trait_type === 'Rarity');
+      .filter(nft => nft.json?.attributes)
+      .map(nft => {
+        const powerAttr = nft.json.attributes.find(a => a.trait_type === 'Power');
+        const rarityAttr = nft.json.attributes.find(a => a.trait_type === 'Rarity');
         return {
           name: nft.name || 'Unknown Gear',
           power: powerAttr ? Number(powerAttr.value) : 10,
-          rarity: rarityAttr ? rarityAttr.value : 'common',
+          rarity: rarityAttr ? rarityAttr.value : 'common'
         };
       });
     playerData.gear = gear.length ? gear : playerData.gear || [];
   } catch (e) {
-    console.warn('NFT gear fetch failed:', e);
+    console.warn("NFT gear fetch failed:", e);
   }
 
   res.json(playerData);
 });
 
-// Protected player save (add signature check later)
+// Player save (POST) – add signature protection later
 app.post('/player/:addr', async (req, res) => {
   const { addr } = req.params;
   const data = req.body;
   await redis.set(`player:${addr}`, JSON.stringify(data));
   res.json({ success: true });
 });
-
-// Narrative API routes
-app.get('/api/narrative/main', (req, res) => res.json(NARRATIVE.main || {}));
-app.get('/api/narrative/dialog', (req, res) => {
-  const summary = Object.entries(NARRATIVE.dialog || {}).map(([key, value]) => ({
-    id: value?.id,
-    npc: value?.npc,
-    key,
-  }));
-  res.json(summary);
-});
-app.get('/api/narrative/dialog/:npc', (req, res) => {
-  const dlg = NARRATIVE.dialog?.[req.params.npc];
-  if (!dlg) return res.status(404).json({ error: 'NPC dialog not found' });
-  res.json(dlg);
-});
-app.get('/api/narrative/terminals', (req, res) => res.json(NARRATIVE.terminals || {}));
-app.get('/api/narrative/encounters', (req, res) => res.json(NARRATIVE.encounters || {}));
-app.get('/api/narrative/collectibles', (req, res) => res.json(NARRATIVE.collectibles || {}));
 
 // Battle endpoint
 app.post('/battle', [
@@ -247,7 +220,7 @@ app.post('/battle', [
           vaultATA.address,
           playerATA.address,
           GAME_VAULT.publicKey,
-          capsReward * 1_000_000 // 6 decimals
+          capsReward * 1_000_000
         )
       );
 
@@ -261,7 +234,7 @@ app.post('/battle', [
       playerData.xp += Math.floor(capsReward / 2);
       playerData.hp = Math.max(0, playerData.hp - 5);
     } catch (e) {
-      console.error('CAPS transfer failed:', e);
+      console.error("CAPS transfer failed:", e);
       return res.status(500).json({ error: 'Reward transfer failed' });
     }
   } else {
@@ -282,7 +255,7 @@ app.post('/battle', [
   });
 });
 
-// SPA catch-all (must be last)
+// Catch-all SPA
 app.get('*', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
