@@ -36,4 +36,4 @@ Play now:(https://atomicfizzcaps.xyz/)
 
 **Survive the Wasteland. Claim your CAPS. War... war never changes.** ☢️
 
-Developed by **Unwrenchable** | Powered by Solana
+Powered by Solana
