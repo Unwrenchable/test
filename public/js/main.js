@@ -1,9 +1,3 @@
-// main.js – Atomic Fizz Caps – Combined & cleaned (v1.1 – full gameplay + narrative)
-
-// ============================================================================
-// CONSTANTS & GLOBALS
-// ============================================================================
-
 const API_BASE = window.location.origin;
 const CLAIM_RADIUS = 50; // meters
 const MAX_RADS = 1000;
@@ -495,4 +489,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   createDropdown('pipboy-dialog-container', 'NPC Records', /* ... */);
   createDropdown('pipboy-story-container', 'Mission Archives', /* ... */);
   createDropdown('terminal-archives-container', 'Vault-Tec Archives', /* ... */);
+
 });
