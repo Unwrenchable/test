@@ -1,3 +1,9 @@
+// main.js – Atomic Fizz Caps – Full merged client-side logic (v1.1 – Pip-Boy UI + GPS + Narrative + Gear)
+
+// ============================================================================
+// CONSTANTS & GLOBALS
+// ============================================================================
+
 const API_BASE = window.location.origin;
 const CLAIM_RADIUS = 50; // meters
 const MAX_RADS = 1000;
@@ -122,7 +128,7 @@ async function fetchPlayer() {
   if (!player.wallet) return;
   try {
     const res = await fetch(`${API_BASE}/player/${player.wallet}`);
-    if (!res.ok) throw new Error();
+    if (!res.ok) throw new Error('Player fetch failed');
     const data = await res.json();
     Object.assign(player, data);
     player.claimed = new Set(data.claimed || []);
@@ -247,7 +253,7 @@ async function attemptClaim(loc) {
 }
 
 // ============================================================================
-// UI & DROPDOWNS (from the first file)
+// NARRATIVE UI – DROPDOWNS & MODALS
 // ============================================================================
 
 function createDropdown(containerId, label, onOpen) {
@@ -294,7 +300,7 @@ function createDropdown(containerId, label, onOpen) {
   });
 }
 
-// Create all narrative dropdowns (same as first file)
+// Create narrative dropdowns
 createDropdown('pipboy-logs-container', 'Terminal Logs', async () => {
   const data = await NarrativeAPI.getCollectibles();
   const logs = data.collectibles || [];
@@ -309,7 +315,6 @@ createDropdown('pipboy-logs-container', 'Terminal Logs', async () => {
   `).join('');
 });
 
-// NPC dialog dropdown + modal (same as first file)
 createDropdown('pipboy-dialog-container', 'NPC Records', async () => {
   const list = await NarrativeAPI.getDialogList();
   if (!list.length) return '<p>No NPC records found.</p>';
@@ -345,7 +350,6 @@ document.addEventListener('click', async e => {
   modal.onclick = ev => { if (ev.target === modal) modal.remove(); };
 });
 
-// Story & Terminal dropdowns (same as first file)
 createDropdown('pipboy-story-container', 'Mission Archives', async () => {
   const main = await NarrativeAPI.getMain();
   const acts = main.acts || [];
@@ -483,11 +487,4 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Initial setup
   updateHPBar();
   initMap();
-
-  // Create all narrative dropdowns
-  createDropdown('pipboy-logs-container', 'Terminal Logs', /* ... */); // already defined above
-  createDropdown('pipboy-dialog-container', 'NPC Records', /* ... */);
-  createDropdown('pipboy-story-container', 'Mission Archives', /* ... */);
-  createDropdown('terminal-archives-container', 'Vault-Tec Archives', /* ... */);
-
 });
