@@ -1,13 +1,3 @@
-// main.js – Atomic Fizz Caps – Full merged client-side logic with Wallet Adapter (v1.2)
-
-// ============================================================================
-// IMPORTS & WALLET ADAPTER SETUP
-// ============================================================================
-
-// These imports require npm install:
-// @solana/web3.js @solana/wallet-adapter-base @solana/wallet-adapter-wallets @solana/wallet-adapter-react-ui
-// For vanilla JS, we use the core adapter packages (no React needed for basic connect)
-
 import { Connection, clusterApiUrl } from '@solana/web3.js';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import {
@@ -261,3 +251,4 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateHPBar();
   initMap();
 });
+
