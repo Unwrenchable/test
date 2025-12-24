@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta property="og:title" content="Atomic Fizz Caps" />
+  <meta property="og:description" content="Post-apocalyptic browser game with real Solana wallet integration" />
+  <title>Atomic Fizz Caps - Pip-Boy</title>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/pipboy.css" />
+</head>
+<body>
+  <div class="pipboy">
+    <div class="panel">
+      <header>
+        <h1>ATOMIC FIZZ CAPS</h1>
+        <div class="sub">PIP-BOY 3000 MARK IV</div>
+      </header>
+
+      <div class="header-row">
+        <div class="controls">
+          <button class="wallet-btn" id="connectWalletBtn">CONNECT WALLET</button>
+          <button class="btn" id="refreshPlayerBtn">REFRESH STATUS</button>
+        </div>
+        <div id="status" class="status-text">STATUS: STANDBY</div>
+      </div>
+
+      <!-- Player Stats -->
+      <section class="pip-status">
+        <div class="pip-lvl">LVL: <span id="playerLevel">1</span></div>
+        <div class="pip-hp-container">
+          <div class="pip-hp-fill" id="hpFill" style="width: 100%;"></div>
+          <div class="pip-rad-fill" id="radFill" style="width: 0%;"></div>
+          <div class="pip-hp-text" id="hpText">HP 100 / 100</div>
+        </div>
+        <div class="pip-caps">CAPS: <span id="playerCaps">0</span></div>
+      </section>
+
+      <div class="pip-xp-container">
+        <div class="pip-xp-fill" id="xpFill" style="width: 0%;"></div>
+        <div class="pip-claimed" id="xpStatus">XP: 0 / 100</div>
+      </div>
+
+      <!-- Map Section -->
+      <section id="mapWrap">
+        <div id="map"></div>
+        <div class="gps-badge">
+          <div class="acc-dot" id="gpsDot"></div>
+          <span id="gpsStatus">GPS: UNKNOWN</span>
+        </div>
+        <button id="requestGpsBtn">REQUEST GPS ACCESS</button>
+      </section>
+
+      <!-- Tabs -->
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="map" role="tab" aria-selected="true">MAP</button>
+        <button class="tab" data-tab="quests" role="tab" aria-selected="false">QUESTS</button>
+        <button class="tab" data-tab="gear" role="tab" aria-selected="false">GEAR</button>
+        <button class="tab" data-tab="narrative" role="tab" aria-selected="false">LORE</button>
+      </div>
+
+      <!-- Tab Content Containers -->
+      <div class="tab-content" id="tab-map">
+        <!-- Map content can go here if you want extra overlay info -->
+      </div>
+
+      <div class="tab-content hidden" id="tab-quests">
+        <div id="questsList">Loading quests...</div>
+      </div>
+
+      <div class="tab-content hidden" id="tab-gear">
+        <div id="gearList">Loading equipped gear...</div>
+      </div>
+
+      <!-- Narrative / Lore Dropdowns & Content -->
+      <div class="tab-content hidden" id="tab-narrative">
+        <section id="narrativeSection">
+          <details class="crt-panel">
+            <summary>▼ MAIN STORY ARCHIVES</summary>
+            <div id="pipboy-story-container">Loading main narrative...</div>
+          </details>
+
+          <details class="crt-panel">
+            <summary>▼ NPC DIALOG RECORDS</summary>
+            <div id="pipboy-dialog-container">Select an NPC to view records...</div>
+          </details>
+
+          <details class="crt-panel">
+            <summary>▼ TERMINAL LOGS</summary>
+            <div id="pipboy-logs-container">Loading terminal entries...</div>
+          </details>
+        </section>
+
+        <!-- Overseer Terminal Archives -->
+        <section id="overseerSection">
+          <details class="crt-panel">
+            <summary>▼ OVERSEER TERMINAL ARCHIVES</summary>
+            <div id="terminal-archives-container">Classified. Clearance required.</div>
+          </details>
+        </section>
+      </div>
+    </div>
+
+    <!-- Terminal Overlay (for immersive reading / hacking feel) -->
+    <div class="terminal hidden" id="terminalOverlay">
+      <div class="terminal-header">TERMINAL ACCESS - CLASSIFIED</div>
+      <div id="terminalContent"></div>
+      <button class="close-terminal" id="closeTerminalBtn">EXIT</button>
+    </div>
+  </div>
+
+  <script src="/js/narrativeClient.js"></script>
+  <script src="/js/main.js"></script>
+</body>
+</html>
