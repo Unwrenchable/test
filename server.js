@@ -23,7 +23,7 @@ const {
 } = require('@solana/spl-token');
 const { Metaplex } = require('@metaplex-foundation/js');
 
-// === Narrative Loader – Moved to server-side (create this file in root) ===
+// === Narrative Loader (server-side) ===
 function safeJsonRead(filePath) {
   try {
     return JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -42,7 +42,7 @@ function loadNarrative(dataDir) {
     collectibles: safeJsonRead(path.join(dataDir, 'collectibles.json')),
   };
 
-  // Load all dialog_*.json files
+  // Load all dialog_*.json files dynamically
   fs.readdirSync(dataDir)
     .filter(file => file.startsWith('dialog_') && file.endsWith('.json'))
     .forEach(file => {
@@ -56,6 +56,14 @@ function loadNarrative(dataDir) {
 process.on('unhandledRejection', (r) => console.warn('Unhandled Rejection:', r));
 process.on('uncaughtException', (e) => console.error('Uncaught Exception:', e));
 
+// Environment variables validation
+const requiredEnv = ['SOLANA_RPC', 'TOKEN_MINT', 'GAME_VAULT_SECRET', 'DEV_WALLET_SECRET', 'REDIS_URL'];
+const missing = requiredEnv.filter(v => !process.env[v]);
+if (missing.length > 0) {
+  console.error(`Missing required env vars: ${missing.join(', ')}`);
+  process.exit(1);
+}
+
 const {
   SOLANA_RPC,
   TOKEN_MINT,
@@ -66,17 +74,12 @@ const {
   REDIS_URL,
 } = process.env;
 
-if (!SOLANA_RPC || !TOKEN_MINT || !GAME_VAULT_SECRET || !DEV_WALLET_SECRET || !REDIS_URL) {
-  console.error('Missing required env vars');
-  process.exit(1);
-}
-
 const connection = new Connection(SOLANA_RPC, 'confirmed');
 const MINT_PUBKEY = new PublicKey(TOKEN_MINT);
 const GAME_VAULT = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(GAME_VAULT_SECRET)));
 const COOLDOWN = Number(COOLDOWN_SECONDS);
 const redis = new Redis(REDIS_URL);
-redis.on('error', (err) => console.error('Redis error:', err));
+redis.on('error', (err) => console.error('Redis connection error:', err));
 
 const metaplex = Metaplex.make(connection);
 
@@ -89,9 +92,10 @@ const NARRATIVE = loadNarrative(DATA_DIR);
 
 const app = express();
 
+// Logging
 app.use(morgan('combined'));
 
-// Helmet CSP – relaxed for media (fixes CodePen audio errors)
+// Helmet CSP – relaxed for media (fixes CodePen audio), scripts, etc.
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -102,9 +106,8 @@ app.use(
         imgSrc: ["'self'", "data:", "https:"],
         connectSrc: ["'self'", SOLANA_RPC, "wss:", "https://unpkg.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-        mediaSrc: ["'self'", "https://assets.codepen.io"], // ← FIXES AUDIO BLOCKS
+        mediaSrc: ["'self'", "https://assets.codepen.io"], // Fixes external audio
         objectSrc: ["'none'"],
-        upgradeInsecureRequests: [],
       },
     },
   })
@@ -113,13 +116,13 @@ app.use(
 app.use(cors());
 app.use(express.json({ limit: '100kb' }));
 
+// Rate limiting
 const globalLimiter = rateLimit({ windowMs: 60_000, max: 200 });
 const actionLimiter = rateLimit({ windowMs: 60_000, max: 20 });
 app.use(globalLimiter);
-app.use('/find-loot', actionLimiter);
-app.use('/shop/', actionLimiter);
-app.use('/battle', actionLimiter);
+app.use(['/find-loot', '/shop', '/battle', '/terminal-reward'], actionLimiter);
 
+// Serve static files from public/
 const PUBLIC_DIR = path.join(__dirname, 'public');
 app.use(express.static(PUBLIC_DIR));
 
@@ -171,7 +174,34 @@ app.post('/player/:addr', async (req, res) => {
   res.json({ success: true });
 });
 
-// Battle endpoint
+// NEW: Terminal game reward endpoint (for overseer.js wins)
+app.post('/api/terminal-reward', [
+  body('wallet').isString().notEmpty(),
+  body('amount').isInt({ min: 1 }),
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+  const { wallet, amount } = req.body;
+
+  try {
+    new PublicKey(wallet);
+  } catch {
+    return res.status(400).json({ error: 'Invalid wallet address' });
+  }
+
+  let playerData = { caps: 0 };
+  const redisData = await redis.get(`player:${wallet}`);
+  if (redisData) playerData = JSON.parse(redisData);
+
+  playerData.caps = (playerData.caps || 0) + Number(amount);
+
+  await redis.set(`player:${wallet}`, JSON.stringify(playerData));
+
+  res.json({ success: true, newCaps: playerData.caps });
+});
+
+// Battle endpoint (existing)
 app.post('/battle', [
   body('wallet').notEmpty(),
   body('gearPower').isInt({ min: 1 }),
@@ -255,7 +285,7 @@ app.post('/battle', [
   });
 });
 
-// Catch-all SPA
+// Catch-all SPA – serve index.html for any unmatched route
 app.get('*', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
@@ -264,5 +294,18 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Atomic Fizz Caps LIVE on port ${PORT}`);
   console.log(`Vault: ${GAME_VAULT.publicKey.toBase58()}`);
 });
+
+// Signature verification helper (used in battle)
+function verifySolanaSignature(message, signature, publicKey) {
+  try {
+    const messageUint8 = new TextEncoder().encode(message);
+    const signatureUint8 = bs58.decode(signature);
+    const publicKeyUint8 = new PublicKey(publicKey).toBytes();
+    return nacl.sign.detached.verify(messageUint8, signatureUint8, publicKeyUint8);
+  } catch (e) {
+    console.error('Signature verification error:', e);
+    return false;
+  }
+}
 
 module.exports = app;
