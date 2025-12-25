@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#001100" /> <!-- Dark green Pip-Boy theme -->
   <meta property="og:title" content="Atomic Fizz Caps" />
   <meta property="og:description" content="Post-apocalyptic browser game with real Solana wallet integration" />
-  <meta property="og:image" content="/images/og-image.png" /> <!-- Optional: add later -->
+  <meta property="og:image" content="/images/og-image.png" /> <!-- Add later if you have one -->
   <title>Atomic Fizz Caps - Pip-Boy</title>
 
   <!-- Favicon -->
@@ -21,13 +21,13 @@
   <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet" />
 
-  <!-- Leaflet CSS + JS (critical for map – with integrity) -->
+  <!-- Leaflet CSS + JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous" defer></script>
 
-  <!-- Your custom Pip-Boy styles -->
+  <!-- Custom Pip-Boy styles -->
   <link rel="stylesheet" href="/css/pipboy.css" />
 </head>
 <body>
@@ -42,6 +42,8 @@
         <div class="controls">
           <button class="wallet-btn" id="connectWalletBtn">CONNECT WALLET</button>
           <button class="btn" id="refreshPlayerBtn">REFRESH STATUS</button>
+          <!-- Terminal unlock button (shown when ready) -->
+          <button class="btn hidden" id="terminalUnlockBtn">ACCESS RESTRICTED SIGNAL</button>
         </div>
         <div id="status" class="status-text">STATUS: STANDBY</div>
       </div>
@@ -80,10 +82,8 @@
         <button class="tab" data-tab="narrative" role="tab" aria-selected="false">LORE</button>
       </div>
 
-      <!-- Tab Content Containers -->
-      <div class="tab-content" id="tab-map">
-        <!-- Map content can go here if you want extra overlay info -->
-      </div>
+      <!-- Tab Content -->
+      <div class="tab-content" id="tab-map"></div>
 
       <div class="tab-content hidden" id="tab-quests">
         <div id="questsList">Loading quests...</div>
@@ -93,7 +93,7 @@
         <div id="gearList">Loading equipped gear...</div>
       </div>
 
-      <!-- Narrative / Lore Dropdowns & Content -->
+      <!-- Narrative / Lore -->
       <div class="tab-content hidden" id="tab-narrative">
         <section id="narrativeSection">
           <details class="crt-panel">
@@ -112,17 +112,18 @@
           </details>
         </section>
 
-        <!-- Overseer Terminal Archives -->
+        <!-- Overseer Terminal Link -->
         <section id="overseerSection">
           <details class="crt-panel">
-            <summary>▼ OVERSEER TERMINAL ARCHIVES</summary>
-            <div id="terminal-archives-container">Classified. Clearance required.</div>
+            <summary>▼ OVERSEER TERMINAL ACCESS</summary>
+            <p>Clearance granted after sufficient exploration.</p>
+            <button id="terminalUnlockBtn" class="hidden">ENTER RESTRICTED TERMINAL</button>
           </details>
         </section>
       </div>
     </div>
 
-    <!-- Terminal Overlay (immersive reading / hacking feel) -->
+    <!-- Terminal Overlay -->
     <div class="terminal hidden" id="terminalOverlay">
       <div class="terminal-header">TERMINAL ACCESS - CLASSIFIED</div>
       <div id="terminalContent"></div>
@@ -130,10 +131,10 @@
     </div>
   </div>
 
-  <!-- Scripts – defer for better performance -->
-  <script defer src="/js/main.js"></script>
+  <!-- Scripts -->
+  <script type="module" src="/js/main.js"></script>
 
-  <!-- Fallback if JS fails -->
+  <!-- Fallback -->
   <noscript>
     <p style="color: #ff6666; text-align: center; padding: 2rem; font-family: 'VT323', monospace;">
       JavaScript is required for the full Pip-Boy experience.<br>
