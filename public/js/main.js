@@ -1,5 +1,3 @@
-// main.js – Atomic Fizz Caps – Full merged logic with Wallet Adapter (v1.3)
-
 import { Connection, clusterApiUrl } from '@solana/web3.js';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import {
@@ -326,3 +324,4 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateHPBar();
   initMap();
 });
+
