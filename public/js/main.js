@@ -1,22 +1,20 @@
+// main.js – Atomic Fizz Caps – Full merged logic with Wallet Adapter (v1.3)
+
 import { Connection, clusterApiUrl } from '@solana/web3.js';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import {
   PhantomWalletAdapter,
   SolflareWalletAdapter,
   BackpackWalletAdapter,
-  // Add more wallets as needed
 } from '@solana/wallet-adapter-wallets';
 
-// Choose network: 'devnet' for testing, 'mainnet-beta' for production
 const network = WalletAdapterNetwork.Devnet;
 const endpoint = clusterApiUrl(network);
 
-// List of supported wallets
 const wallets = [
   new PhantomWalletAdapter(),
   new SolflareWalletAdapter(),
   new BackpackWalletAdapter(),
-  // Add Glow, Ledger, etc. here
 ];
 
 let selectedWallet = null;
@@ -27,7 +25,7 @@ let publicKey = null;
 // ============================================================================
 
 const API_BASE = window.location.origin;
-const CLAIM_RADIUS = 50; // meters
+const CLAIM_RADIUS = 50;
 const MAX_RADS = 1000;
 const DROP_CHANCE = { legendary: 0.35, epic: 0.18, rare: 0.09, common: 0.04 };
 
@@ -46,7 +44,7 @@ const EFFECT_POOL = {
 };
 
 let player = {
-  wallet: null,
+  wallet: localStorage.getItem('connectedWallet') || null,
   lvl: 1,
   hp: 100,
   maxHp: 100,
@@ -55,7 +53,7 @@ let player = {
   xp: 0,
   xpToNext: 100,
   gear: [],
-  equipped: {}, // gearId -> gear object
+  equipped: {},
   claimed: new Set(),
   quests: []
 };
@@ -140,7 +138,6 @@ function playSfx(id, volume = 0.4) {
 
 async function connectWallet() {
   try {
-    // Simple prompt for now (upgrade to modal later)
     const walletName = prompt('Enter wallet name (phantom, solflare, backpack):')?.toLowerCase();
     selectedWallet = wallets.find(w => w.name.toLowerCase().includes(walletName));
 
@@ -149,6 +146,7 @@ async function connectWallet() {
     await selectedWallet.connect();
     publicKey = selectedWallet.publicKey.toString();
     player.wallet = publicKey;
+    localStorage.setItem('connectedWallet', publicKey); // persist
     document.getElementById('status').textContent = `STATUS: CONNECTED (${publicKey.slice(0,6)}...)`;
     setStatus('Wallet connected!', true, 5000);
     await fetchPlayer();
@@ -164,6 +162,7 @@ function disconnectWallet() {
     selectedWallet = null;
     publicKey = null;
     player.wallet = null;
+    localStorage.removeItem('connectedWallet');
     setStatus('Disconnected', true);
   }
 }
@@ -200,44 +199,121 @@ async function fetchPlayer() {
 }
 
 // ============================================================================
-// GPS + MAP + CLAIMING (unchanged from your working version)
+// GPS + MAP + CLAIMING
 // ============================================================================
 
-// ... (keep your placeMarker, startLocation, attemptClaim functions as-is) ...
+function placeMarker(lat, lng, accuracy) {
+  playerLatLng = L.latLng(lat, lng);
+  lastAccuracy = accuracy;
 
-// ============================================================================
-// NARRATIVE UI – DROPDOWNS & MODALS (unchanged)
-// ============================================================================
+  if (!playerMarker) {
+    playerMarker = L.circleMarker(playerLatLng, { radius: 10, color: '#00ff41', weight: 3, fillOpacity: 0.9 })
+      .addTo(map)
+      .bindPopup('You are here');
+  } else {
+    playerMarker.setLatLng(playerLatLng);
+  }
 
-// ... (keep your createDropdown, NPC modal, story/terminal dropdowns as-is) ...
+  document.getElementById('gpsStatus').textContent = `GPS: ${Math.round(accuracy)}m`;
+  document.getElementById('gpsDot').className = 'acc-dot ' + (accuracy <= 20 ? 'acc-green' : 'acc-amber');
 
-// ============================================================================
-// MAP INITIALIZATION + EVENT HANDLERS (unchanged)
-// ============================================================================
+  if (firstLock) {
+    map.flyTo(playerLatLng, 16);
+    firstLock = false;
+  }
+  document.getElementById('requestGpsBtn').style.display = 'none';
+  setStatus("GPS LOCK ACQUIRED", true, 5000);
+}
 
-// ... (keep initMap as-is) ...
+function startLocation() {
+  if (!navigator.geolocation) return setStatus("GPS not supported", false);
+  if (watchId) navigator.geolocation.clearWatch(watchId);
+  watchId = navigator.geolocation.watchPosition(
+    pos => placeMarker(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+    () => setStatus("GPS error", false),
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+  );
+  setStatus("Requesting GPS lock...");
+}
 
-// ============================================================================
-// DOM READY – WIRE EVERYTHING UP
-// ============================================================================
+async function attemptClaim(loc) {
+  if (lastAccuracy > CLAIM_RADIUS || !playerLatLng || !player.wallet || player.claimed.has(loc.n)) {
+    setStatus("Cannot claim", false);
+    return;
+  }
+  const dist = map.distance(playerLatLng, L.latLng(loc.lat, loc.lng));
+  if (dist > CLAIM_RADIUS) {
+    setStatus(`Too far (${Math.round(dist)}m)`, false);
+    return;
+  }
+
+  const message = `Claim:${loc.n}:${Date.now()}`;
+  try {
+    const encoded = new TextEncoder().encode(message);
+    const signed = await selectedWallet.signMessage(encoded);
+    const signature = bs58.encode(signed);
+
+    const res = await fetch(`${API_BASE}/find-loot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        wallet: player.wallet,
+        spot: loc.n,
+        message,
+        signature
+      })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      player.caps = data.totalCaps || player.caps;
+      player.claimed.add(loc.n);
+      markers[loc.n]?.setStyle({ fillColor: '#003300', fillOpacity: 0.5 });
+
+      const baseRad = loc.rarity === 'legendary' ? 120 : loc.rarity === 'epic' ? 80 : loc.rarity === 'rare' ? 50 : 20;
+      player.rads = Math.min(MAX_RADS, player.rads + Math.max(5, baseRad - (player.radResist || 0) / 3));
+
+      const xpGain = loc.rarity === 'legendary' ? 150 : loc.rarity === 'epic' ? 100 : loc.rarity === 'rare' ? 60 : 30;
+      player.xp += xpGain;
+
+      while (player.xp >= player.xpToNext) {
+        player.xp -= player.xpToNext;
+        player.lvl++;
+        player.xpToNext = Math.floor(player.xpToNext * 1.5);
+        player.maxHp += 10;
+        player.hp = player.maxHp;
+        setStatus(`LEVEL UP! Level ${player.lvl}`, true, 12000);
+        playSfx('sfxLevelUp', 0.8);
+      }
+
+      if (Math.random() < (DROP_CHANCE[loc.rarity] || DROP_CHANCE.common)) {
+        const newGear = generateGearDrop(loc.rarity || 'common');
+        player.gear.push(newGear);
+        setStatus(`GEAR DROP! ${newGear.name} (${newGear.rarity.toUpperCase()})`, true, 15000);
+        playSfx('sfxGearDrop', 0.7);
+      }
+
+      playSfx('sfxClaim', 0.5);
+      updateHPBar();
+      // checkTerminalAccess(); // Add this if you have it
+    } else {
+      setStatus(data.error || "Claim failed", false);
+    }
+  } catch (err) {
+    setStatus("Claim error", false);
+    console.error(err);
+  }
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Wallet connect – now using adapter
   document.getElementById('connectWalletBtn')?.addEventListener('click', connectWallet);
-
-  // Optional: Add disconnect button somewhere in UI
-  // document.getElementById('disconnectBtn')?.addEventListener('click', disconnectWallet);
-
   document.getElementById('refreshPlayerBtn')?.addEventListener('click', fetchPlayer);
-
   document.getElementById('requestGpsBtn')?.addEventListener('click', startLocation);
 
-  // Sound effects on buttons
   document.querySelectorAll('.btn, .tab, .dropdown-btn').forEach(el => {
     el.addEventListener('click', () => playSfx('sfxButton', 0.3));
   });
 
-  // Radiation drain
   setInterval(() => {
     const effectiveRads = Math.max(0, player.rads - (player.radResist || 0));
     if (effectiveRads > 150 && player.hp > 0) {
@@ -247,8 +323,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }, 30000);
 
-  // Initial setup
   updateHPBar();
   initMap();
 });
-
