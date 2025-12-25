@@ -1,5 +1,3 @@
-// public/js/narrativeClient.js
-
 const NarrativeAPI = (() => {
   async function getJson(url) {
     const res = await fetch(url);
@@ -16,3 +14,4 @@ const NarrativeAPI = (() => {
     getCollectibles: () => getJson('/api/narrative/collectibles')
   };
 })();
+
