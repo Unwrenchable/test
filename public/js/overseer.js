@@ -528,7 +528,107 @@ function handleWar(input) {
   }
   return result;
 }
+/* === TEXAS HOLD'EM – SIMPLIFIED CASINO POKER === */
+function startTexasHoldem() {
+  state.gameActive = 'texasholdem';
+  state.thPlayerHand = [];
+  state.thDealerHand = [];
+  state.thCommunity = [];
+  state.thDeck = createDeck();
 
+  // Deal hole cards
+  state.thPlayerHand.push(drawCard(), drawCard());
+  state.thDealerHand.push(drawCard(), drawCard());
+
+  // Deal flop (3 cards)
+  state.thCommunity.push(drawCard(), drawCard(), drawCard());
+  // Turn & River will be dealt later if player continues
+
+  addMessage(
+    "TEXAS HOLD'EM - LUCKY 38 STYLE<br><br>" +
+    "Your hole cards: " + handToString(state.thPlayerHand) + "<br>" +
+    "Community (Flop): " + handToString(state.thCommunity) + "<br><br>" +
+    "Type 'continue' to deal turn & river, or 'fold' to quit.",
+    "overseer"
+  );
+}
+
+function handleTexasHoldem(input) {
+  input = input.toLowerCase();
+  if (input === 'fold') {
+    state.gameActive = null;
+    return "You fold. Better luck next hand.";
+  }
+
+  if (input === 'continue') {
+    // Deal turn & river
+    state.thCommunity.push(drawCard()); // Turn
+    state.thCommunity.push(drawCard()); // River
+
+    const playerBest = getBestHand(state.thPlayerHand.concat(state.thCommunity));
+    const dealerBest = getBestHand(state.thDealerHand.concat(state.thCommunity));
+
+    let result = "Final board: " + handToString(state.thCommunity) + "<br><br>";
+    result += "Your best hand: " + playerBest.name + " (" + handToString(playerBest.cards) + ")<br>";
+    result += "Dealer's best hand: " + dealerBest.name + " (" + handToString(dealerBest.cards) + ")<br><br>";
+
+    if (compareHands(playerBest, dealerBest) > 0) {
+      state.player.caps += 150;
+      updateHPBar();
+      result += "You win! CAPS +150<br><br>The dealer tips his hat.";
+    } else if (compareHands(playerBest, dealerBest) < 0) {
+      result += "House wins. Better luck next time.";
+    } else {
+      result += "Push — tie. No change.";
+    }
+
+    state.gameActive = null;
+    return result;
+  }
+
+  return "Type 'continue' to see turn/river, or 'fold' to quit.";
+}
+
+// Deck & Hand Helpers
+function createDeck() {
+  const suits = ['♠', '♥', '♦', '♣'];
+  const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+  let deck = [];
+  for (let suit of suits) for (let rank of ranks) deck.push({ rank, suit });
+  return deck.sort(() => Math.random() - 0.5);
+}
+
+function drawCard() { return state.thDeck.pop(); }
+
+function handToString(hand) {
+  return hand.map(c => c.rank + c.suit).join(', ');
+}
+
+// Simplified hand evaluation (returns { name, cards })
+function getBestHand(cards) {
+  // Very basic — just check for pairs, straights, etc. (expand later if needed)
+  const ranks = cards.map(c => c.rank);
+  const suits = cards.map(c => c.suit);
+  const rankCounts = {};
+  ranks.forEach(r => rankCounts[r] = (rankCounts[r] || 0) + 1);
+
+  if (Object.values(rankCounts).includes(2) && Object.values(rankCounts).includes(3)) return { name: "Full House", cards };
+  if (Object.values(rankCounts).includes(4)) return { name: "Four of a Kind", cards };
+  if (Object.values(rankCounts).includes(3)) return { name: "Three of a Kind", cards };
+  if (Object.values(rankCounts).filter(v => v === 2).length === 2) return { name: "Two Pair", cards };
+  if (Object.values(rankCounts).includes(2)) return { name: "Pair", cards };
+  return { name: "High Card", cards };
+}
+
+// Compare two hands (simplified)
+function compareHands(hand1, hand2) {
+  const rankOrder = ['High Card', 'Pair', 'Two Pair', 'Three of a Kind', 'Full House', 'Four of a Kind'];
+  const h1Rank = rankOrder.indexOf(hand1.name);
+  const h2Rank = rankOrder.indexOf(hand2.name);
+  if (h1Rank > h2Rank) return 1;
+  if (h1Rank < h2Rank) return -1;
+  return 0; // Tie for now
+}
 // Placeholder for player data updates (link to your main game)
 function updateHPBar() {
   console.log(`CAPS updated to: ${state.player.caps}`);
