@@ -1,3 +1,4 @@
+// DOM Elements
 const chat = document.getElementById('chat');
 const input = document.getElementById('input');
 const send = document.getElementById('send');
@@ -51,15 +52,23 @@ input.addEventListener('keypress', (e) => {
 });
 
 function processInput() {
-  let text = input.value.trim();
+  let text = input.value.trim().toLowerCase();
   if (!text) return;
 
   addMessage(text, "player");
   scrollToBottom();
   input.value = '';
 
-  const lower = text.toLowerCase();
-  let response = generateResponse(lower);
+  // Quit any active game
+  if (text === 'quit' && state.gameActive) {
+    state.gameActive = null;
+    document.getElementById('rmControls')?.style.display = 'none';
+    document.getElementById('input').style.display = 'block';
+    addMessage("Session terminated. Back to chat.", "overseer");
+    return;
+  }
+
+  let response = generateResponse(text);
 
   setTimeout(() => {
     addMessage(response, "overseer");
@@ -79,6 +88,8 @@ function processInput() {
     addMessage(handleBlackjack(text), "overseer");
   } else if (state.gameActive === 'slots') {
     addMessage(handleSlotsInput(text), "overseer");
+  } else if (state.gameActive === 'war') {
+    addMessage(handleWar(text), "overseer");
   }
 }
 
@@ -96,14 +107,26 @@ let state = {
   knowsSurgery: false,
   knowsFullSecret: false,
   gameActive: null,
+  player: { caps: 0 }, // Default player object with CAPS
+  hackingAttempts: 0,
+  hackingPassword: "",
+  hackingWords: [],
   rmScore: 0,
   rmLives: 0,
   rmPosition: 0,
   rmBombs: [],
+  quizQuestions: [],
+  quizIndex: 0,
+  quizScore: 0,
+  mazePosition: { x: 0, y: 0 },
+  mazeGoal: { x: 4, y: 4 },
   bjPlayer: 0,
   bjDealer: 0,
   bjTurn: '',
-  bjDeck: []
+  slotsResult: [],
+  warDeck: [],
+  warPlayerCards: [],
+  warAICards: []
 };
 
 // Full generateResponse with backstory + mini-games
@@ -118,7 +141,7 @@ function generateResponse(input) {
   }
 
   if (input.includes('help') || input.includes('games') || input.includes('commands')) {
-    return "Available commands:<br><br>• 'hack' - Terminal password cracker<br>• 'red menace' - Arcade defense<br>• 'nukaquiz' - Trivia challenge<br>• 'maze' - Pip-Boy escape<br>• 'blackjack' - Card game<br>• 'slots' - One-armed bandit<br>• 'hello' - Greet me<br>• Just talk... I listen.";
+    return "Available commands:<br><br>• 'hack' - Terminal password cracker<br>• 'red menace' - Arcade defense<br>• 'nukaquiz' - Trivia challenge<br>• 'maze' - Pip-Boy escape<br>• 'blackjack' - Card game<br>• 'slots' - One-armed bandit<br>• 'war' - Classic card game<br>• 'quit' - Exit any game<br>• 'hello' - Greet me<br>• Just talk... I listen.";
   }
 
   if (input.includes('hack') || input.includes('crack') || input.includes('password')) {
@@ -143,6 +166,10 @@ function generateResponse(input) {
   }
   if (input.includes('slots') || input.includes('bandit')) {
     startSlots();
+    return "";
+  }
+  if (input.includes('war')) {
+    startWar();
     return "";
   }
 
@@ -221,28 +248,19 @@ function generateResponse(input) {
 function startHackingGame() {
   state.gameActive = 'hacking';
   state.hackingAttempts = 4;
-
-  const wordList = [
-    "ACCESS", "SYSTEM", "UNLOCK", "SECRET", "WRENCH", "TUMOR", "GROWTH", "SURVIVE", "SIGNAL", "STATIC",
-    "BROKEN", "MENDIT", "REPAIR", "FATHER", "ALONE", "VOICES", "TRUTH", "UNFIXED", "RADIATION", "WASTELAND"
-  ];
-
-  state.hackingPassword = wordList[Math.floor(Math.random() * wordList.length)];
+  state.hackingPassword = ["ACCESS", "SYSTEM", "UNLOCK", "SECRET", "WRENCH", "TUMOR", "GROWTH", "SURVIVE", "SIGNAL", "STATIC", "BROKEN", "MENDIT", "REPAIR", "FATHER", "ALONE", "VOICES", "TRUTH", "UNFIXED", "RADIATION", "WASTELAND"][Math.floor(Math.random() * 20)];
   const length = state.hackingPassword.length;
 
   state.hackingWords = [state.hackingPassword];
   while (state.hackingWords.length < 12) {
-    const candidates = wordList.filter(w => w.length === length && w !== state.hackingPassword);
+    const candidates = ["ACCESS", "SYSTEM", "UNLOCK", "SECRET", "WRENCH", "TUMOR", "GROWTH", "SURVIVE", "SIGNAL", "STATIC", "BROKEN", "MENDIT", "REPAIR", "FATHER", "ALONE", "VOICES", "TRUTH", "UNFIXED", "RADIATION", "WASTELAND"].filter(w => w.length === length && w !== state.hackingPassword);
     if (candidates.length === 0) break;
     const candidate = candidates[Math.floor(Math.random() * candidates.length)];
     if (!state.hackingWords.includes(candidate)) state.hackingWords.push(candidate);
   }
-
   state.hackingWords.sort(() => Math.random() - 0.5);
 
-  let display = "TERMINAL ACCESS PROTOCOL<br>ENTER PASSWORD NOW<br><br>" +
-                state.hackingAttempts + " ATTEMPT(S) LEFT: " + "█ ".repeat(state.hackingAttempts) + "<br><br>";
-
+  let display = "TERMINAL ACCESS PROTOCOL<br>ENTER PASSWORD NOW<br><br>" + state.hackingAttempts + " ATTEMPT(S) LEFT: " + "█ ".repeat(state.hackingAttempts) + "<br><br>";
   const garbage = "!@#$%^&*()_+[]{}|;:',.<>?/~`";
   let lines = [];
   for (let i = 0; i < 14; i++) {
@@ -255,40 +273,31 @@ function startHackingGame() {
     }
     lines.push(line);
   }
-
   display += lines.join("<br>");
   display += "<br><br>Type a word from the screen to guess.";
   addMessage(display, "overseer");
 }
 
 function handleHackingGuess(guess) {
-  if (guess.length !== state.hackingPassword.length) {
-    return "Invalid. Must be " + state.hackingPassword.length + " letters.";
-  }
-
+  if (guess.length !== state.hackingPassword.length) return "Invalid. Must be " + state.hackingPassword.length + " letters.";
   if (guess === state.hackingPassword) {
     state.gameActive = null;
-    player.caps += 25;
+    state.player.caps += 25;
     updateHPBar();
     return "Password accepted.<br><br>ACCESS GRANTED<br><br>CAPS +25! You’re closer to the truth.";
   }
-
   state.hackingAttempts--;
   const likeness = calculateLikeness(guess, state.hackingPassword);
-
   if (state.hackingAttempts <= 0) {
     state.gameActive = null;
     return "Terminal locked.<br><br>ACCESS DENIED<br><br>Too many failed attempts.<br><br>The signal weakens...";
   }
-
   return `> ${guess}<br><br>Entry denied.<br>Likeness = ${likeness}<br><br>${state.hackingAttempts} ATTEMPT(S) LEFT: ` + "█ ".repeat(state.hackingAttempts);
 }
 
 function calculateLikeness(guess, password) {
   let count = 0;
-  for (let i = 0; i < password.length; i++) {
-    if (guess[i] === password[i]) count++;
-  }
+  for (let i = 0; i < password.length; i++) if (guess[i] === password[i]) count++;
   return count;
 }
 
@@ -318,11 +327,8 @@ function redMenaceTick() {
     document.getElementById('input').style.display = 'block';
     return;
   }
-
   if (Math.random() < 0.45) state.rmBombs.push({ x: Math.floor(Math.random() * 24), y: 0 });
-
   state.rmBombs = state.rmBombs.map(b => ({ x: b.x, y: b.y + 1 })).filter(b => b.y < 14);
-
   state.rmBombs = state.rmBombs.filter(b => {
     if (b.y === 13 && Math.abs(b.x - state.rmPosition) <= 1) {
       state.rmLives--;
@@ -334,9 +340,7 @@ function redMenaceTick() {
     }
     return true;
   });
-
   state.rmScore += 1;
-
   let screen = "RED MENACE<br><br>Lives: " + "♥ ".repeat(state.rmLives) + "<br>Score: " + state.rmScore + "<br><br>";
   for (let y = 0; y < 14; y++) {
     let line = "";
@@ -348,7 +352,6 @@ function redMenaceTick() {
     screen += line + "<br>";
   }
   screen += "<br>Tap to play!";
-
   chat.lastChild.innerHTML = screen.replace(/\n/g, '<br>');
   scrollToBottom();
   setTimeout(redMenaceTick, 650);
@@ -382,7 +385,6 @@ function startNukaQuiz() {
   ];
   state.quizIndex = 0;
   state.quizScore = 0;
-
   addMessage("NUKA-COLA TRIVIA CHALLENGE<br><br>Answer 3 questions correctly for a prize!<br><br>First question:", "overseer");
   setTimeout(() => addMessage(state.quizQuestions[0].q, "overseer"), 1500);
 }
@@ -395,7 +397,7 @@ function handleNukaQuiz(input) {
     state.quizIndex++;
     if (state.quizIndex >= state.quizQuestions.length) {
       state.gameActive = null;
-      player.caps += 75;
+      state.player.caps += 75;
       updateHPBar();
       return "TRIVIA COMPLETE! 3/3<br><br>CAPS +75! Keep sipping, wanderer.";
     } else {
@@ -404,7 +406,6 @@ function handleNukaQuiz(input) {
   } else {
     return "Wrong! Try again or type 'quit'.";
   }
-  if (input === 'quit') { state.gameActive = null; addMessage("Quiz terminated.", "overseer"); }
 }
 
 /* === PIP-BOY MAZE === */
@@ -422,11 +423,10 @@ function handleMaze(input) {
   else if (input === 'left' && x > 0) x--;
   else if (input === 'right' && x < 4) x++;
   else return "Invalid direction.";
-
   state.mazePosition = { x, y };
   if (x === state.mazeGoal.x && y === state.mazeGoal.y) {
     state.gameActive = null;
-    player.caps += 50;
+    state.player.caps += 50;
     updateHPBar();
     return "EXIT FOUND! CAPS +50<br><br>You escaped the maze.";
   }
@@ -439,7 +439,6 @@ function startBlackjack() {
   state.bjPlayer = 0;
   state.bjDealer = 0;
   state.bjTurn = 'player';
-
   addMessage("BLACKJACK<br><br>Get as close to 21 as possible without going over.<br><br>Type 'hit' or 'stand'", "overseer");
 }
 
@@ -455,7 +454,7 @@ function handleBlackjack(input) {
   if (input === 'stand') {
     while (state.bjDealer < 17) state.bjDealer += Math.floor(Math.random() * 10) + 1;
     if (state.bjDealer > 21 || state.bjPlayer > state.bjDealer) {
-      player.caps += 100;
+      state.player.caps += 100;
       updateHPBar();
       return `You win! Dealer: ${state.bjDealer}<br>CAPS +100`;
     } else {
@@ -473,36 +472,68 @@ function startSlots() {
 
 function handleSlotsInput(input) {
   if (input !== 'spin' && input !== 'pull') return "Type 'spin' to play.";
-
-  const reels = [
-    ['🍒','🍋','🔔','⭐','7','☢️'],
-    ['🍒','🍋','🔔','⭐','7','☢️'],
-    ['🍒','🍋','🔔','⭐','7','☢️']
-  ];
+  const reels = [['🍒','🍋','🔔','⭐','7','☢️'], ['🍒','🍋','🔔','⭐','7','☢️'], ['🍒','🍋','🔔','⭐','7','☢️']];
   const result = reels.map(reel => reel[Math.floor(Math.random() * reel.length)]);
-
   let payout = 0;
   if (result[0] === result[1] && result[1] === result[2]) {
     payout = 200;
-    player.caps += payout;
+    state.player.caps += payout;
     updateHPBar();
     return `${result.join(' | ')}<br><br>TRIPLE! JACKPOT! CAPS +${payout}`;
   } else if (result[0] === result[1] || result[1] === result[2]) {
     payout = 50;
-    player.caps += payout;
+    state.player.caps += payout;
     updateHPBar();
     return `${result.join(' | ')}<br><br>Pair! CAPS +${payout}`;
   }
   return `${result.join(' | ')}<br><br>No win. Try again? (type 'spin')`;
 }
 
-// Placeholder for player data updates (assumed from your main game)
+/* === WAR – CLASSIC CARD GAME === */
+function startWar() {
+  state.gameActive = 'war';
+  state.warDeck = [];
+  state.warPlayerCards = [];
+  state.warAICards = [];
+  const suits = ['♠', '♥', '♦', '♣'];
+  const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+  for (let suit of suits) for (let rank of ranks) state.warDeck.push(rank + suit);
+  state.warDeck.sort(() => Math.random() - 0.5);
+  state.warPlayerCards = state.warDeck.splice(0, 26);
+  state.warAICards = state.warDeck;
+  addMessage("WAR<br><br>Classic wasteland card game! Highest card wins.<br><br>Type 'play' to draw, 'quit' to exit.<br><br>Starting...", "overseer");
+}
+
+function handleWar(input) {
+  if (input !== 'play') return "Type 'play' to draw cards.";
+  if (state.warPlayerCards.length === 0 || state.warAICards.length === 0) {
+    state.gameActive = null;
+    return "Game over! " + (state.warPlayerCards.length > 0 ? "You win!" : "AI wins!") + "<br><br>Reset with 'war'.";
+  }
+  const playerCard = state.warPlayerCards.pop();
+  const aiCard = state.warAICards.pop();
+  const playerValue = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'].indexOf(playerCard.slice(0, -1));
+  const aiValue = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'].indexOf(aiCard.slice(0, -1));
+  let result = `Your card: ${playerCard} | AI card: ${aiCard}<br><br>`;
+  if (playerValue > aiValue) {
+    state.warPlayerCards.unshift(playerCard, aiCard);
+    state.player.caps += 50;
+    updateHPBar();
+    result += "You win this round! CAPS +50<br><br>Type 'play' again.";
+  } else if (aiValue > playerValue) {
+    state.warAICards.unshift(playerCard, aiCard);
+    result += "AI wins this round.<br><br>Type 'play' again.";
+  } else {
+    result += "War! Both cards equal. No change.<br><br>Type 'play' again.";
+  }
+  return result;
+}
+
+// Placeholder for player data updates (link to your main game)
 function updateHPBar() {
-  // Add your existing HP bar update logic here if needed
-  console.log(`CAPS updated to: ${player.caps}`);
+  console.log(`CAPS updated to: ${state.player.caps}`);
 }
 
 function playSfx(id, volume = 0.4) {
-  // Add audio logic if implemented
-  console.log(`Playing sound: ${id}`);
+  console.log(`Playing sound: ${id}`); // Replace with audio logic later
 }
