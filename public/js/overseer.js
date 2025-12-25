@@ -1,16 +1,13 @@
-// DOM Elements
 const chat = document.getElementById('chat');
 const input = document.getElementById('input');
 const send = document.getElementById('send');
 
 input.focus();
 
-// Reliable scroll to bottom
 function scrollToBottom() {
   chat.scrollTop = chat.scrollHeight;
 }
 
-// Typewriter effect with guaranteed scroll
 function addMessage(text, sender = "player") {
   const div = document.createElement('div');
   div.className = `message ${sender}`;
@@ -32,7 +29,6 @@ function addMessage(text, sender = "player") {
   }, 30);
 }
 
-// Initial greeting
 window.addEventListener('load', () => {
   addMessage(
     "Static... *crackle*...<br><br>" +
@@ -59,7 +55,6 @@ function processInput() {
   scrollToBottom();
   input.value = '';
 
-  // Quit any active game
   if (text === 'quit' && state.gameActive) {
     state.gameActive = null;
     document.getElementById('rmControls')?.style.display = 'none';
@@ -75,7 +70,6 @@ function processInput() {
     scrollToBottom();
   }, 1200 + Math.random() * 1800);
 
-  // Route game inputs
   if (state.gameActive === 'hacking') {
     addMessage(handleHackingGuess(text.toUpperCase()), "overseer");
   } else if (state.gameActive === 'redmenace') {
@@ -93,7 +87,6 @@ function processInput() {
   }
 }
 
-// Conversation state
 let state = {
   greeted: false,
   complianceLevel: 0,
@@ -129,7 +122,6 @@ let state = {
   warAICards: []
 };
 
-// Full generateResponse with backstory + mini-games
 function generateResponse(input) {
   if (!state.greeted) {
     state.greeted = true;
@@ -244,7 +236,6 @@ function generateResponse(input) {
   return fallbacks[Math.floor(Math.random() * fallbacks.length)];
 }
 
-/* === HACKING MINI-GAME === */
 function startHackingGame() {
   state.gameActive = 'hacking';
   state.hackingAttempts = 4;
@@ -301,7 +292,6 @@ function calculateLikeness(guess, password) {
   return count;
 }
 
-/* === RED MENACE – TAP-FRIENDLY ARCADE GAME === */
 function startRedMenace() {
   state.gameActive = 'redmenace';
   state.rmScore = 0;
@@ -375,7 +365,6 @@ function gameOverRedMenace() {
   addMessage("GAME OVER<br><br>Final Score: " + state.rmScore + "<br><br>The city falls.<br><br>But you fought.", "overseer");
 }
 
-/* === NUKA-COLA TRIVIA QUIZ === */
 function startNukaQuiz() {
   state.gameActive = 'nukaquiz';
   state.quizQuestions = [
@@ -408,7 +397,6 @@ function handleNukaQuiz(input) {
   }
 }
 
-/* === PIP-BOY MAZE === */
 function startMaze() {
   state.gameActive = 'maze';
   state.mazePosition = { x: 0, y: 0 };
@@ -433,7 +421,6 @@ function handleMaze(input) {
   return `Current position: (${x},${y})`;
 }
 
-/* === BLACKJACK === */
 function startBlackjack() {
   state.gameActive = 'blackjack';
   state.bjPlayer = 0;
@@ -464,7 +451,6 @@ function handleBlackjack(input) {
   return "Type 'hit' or 'stand'";
 }
 
-/* === SLOTS – ONE-ARMED BANDIT === */
 function startSlots() {
   state.gameActive = 'slots';
   addMessage("LUCKY 38 ONE-ARMED BANDIT<br><br>Type 'spin' to pull the lever!<br><br>Symbols: 🍒 🍋 🔔 ⭐ 7 ☢️", "overseer");
@@ -489,7 +475,6 @@ function handleSlotsInput(input) {
   return `${result.join(' | ')}<br><br>No win. Try again? (type 'spin')`;
 }
 
-/* === WAR – CLASSIC CARD GAME === */
 function startWar() {
   state.gameActive = 'war';
   state.warDeck = [];
@@ -528,7 +513,7 @@ function handleWar(input) {
   }
   return result;
 }
-/* === TEXAS HOLD'EM – SIMPLIFIED CASINO POKER === */
+
 function startTexasHoldem() {
   state.gameActive = 'texasholdem';
   state.thPlayerHand = [];
@@ -536,14 +521,11 @@ function startTexasHoldem() {
   state.thCommunity = [];
   state.thDeck = createDeck();
 
-  // Deal hole cards
   state.thPlayerHand.push(drawCard(), drawCard());
   state.thDealerHand.push(drawCard(), drawCard());
-
-  // Deal flop (3 cards)
+)
   state.thCommunity.push(drawCard(), drawCard(), drawCard());
-  // Turn & River will be dealt later if player continues
-
+  
   addMessage(
     "TEXAS HOLD'EM - LUCKY 38 STYLE<br><br>" +
     "Your hole cards: " + handToString(state.thPlayerHand) + "<br>" +
@@ -561,7 +543,7 @@ function handleTexasHoldem(input) {
   }
 
   if (input === 'continue') {
-    // Deal turn & river
+   
     state.thCommunity.push(drawCard()); // Turn
     state.thCommunity.push(drawCard()); // River
 
@@ -589,7 +571,6 @@ function handleTexasHoldem(input) {
   return "Type 'continue' to see turn/river, or 'fold' to quit.";
 }
 
-// Deck & Hand Helpers
 function createDeck() {
   const suits = ['♠', '♥', '♦', '♣'];
   const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
@@ -604,9 +585,8 @@ function handToString(hand) {
   return hand.map(c => c.rank + c.suit).join(', ');
 }
 
-// Simplified hand evaluation (returns { name, cards })
 function getBestHand(cards) {
-  // Very basic — just check for pairs, straights, etc. (expand later if needed)
+  
   const ranks = cards.map(c => c.rank);
   const suits = cards.map(c => c.suit);
   const rankCounts = {};
@@ -620,7 +600,6 @@ function getBestHand(cards) {
   return { name: "High Card", cards };
 }
 
-// Compare two hands (simplified)
 function compareHands(hand1, hand2) {
   const rankOrder = ['High Card', 'Pair', 'Two Pair', 'Three of a Kind', 'Full House', 'Four of a Kind'];
   const h1Rank = rankOrder.indexOf(hand1.name);
@@ -629,7 +608,7 @@ function compareHands(hand1, hand2) {
   if (h1Rank < h2Rank) return -1;
   return 0; // Tie for now
 }
-// Placeholder for player data updates (link to your main game)
+
 function updateHPBar() {
   console.log(`CAPS updated to: ${state.player.caps}`);
 }
