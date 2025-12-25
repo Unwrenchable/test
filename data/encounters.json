@@ -1,7 +1,6 @@
 {
   "id": "encounters_pack_v1",
   "description": "Additive encounters tied to real POIs from locations.json. These trigger on first visit, repeat visits, or special conditions.",
-
   "encounters": [
     {
       "id": "enc_rex_dam_greeting",
@@ -15,7 +14,6 @@
       "trigger": "repeat_visit",
       "dialog": "Your Pip-Boy crackles. A burst of static forms a pattern — almost like coordinates."
     },
-
     {
       "id": "enc_glow_warning",
       "poi": "Glow",
@@ -28,7 +26,6 @@
       "trigger": "repeat_visit",
       "dialog": "The air hums. The ground vibrates. Something beneath the soil is awake."
     },
-
     {
       "id": "enc_glowing_sea_storm",
       "poi": "Glowing Sea",
@@ -41,7 +38,6 @@
       "trigger": "repeat_visit",
       "dialog": "The storm whispers. Not wind. Not static. Something else."
     },
-
     {
       "id": "enc_dead_wind_cavern_roar",
       "poi": "Dead Wind Cavern",
@@ -54,7 +50,6 @@
       "trigger": "repeat_visit",
       "dialog": "Fresh claw marks line the rock. Whatever lives here is hunting."
     },
-
     {
       "id": "enc_deathclaw_promontory_shadow",
       "poi": "Deathclaw Promontory",
@@ -67,7 +62,6 @@
       "trigger": "repeat_visit",
       "dialog": "The rocks shift. Something is stalking you from above."
     },
-
     {
       "id": "enc_trinity_site_glass",
       "poi": "Trinity Site",
@@ -80,7 +74,6 @@
       "trigger": "repeat_visit",
       "dialog": "Your Pip-Boy picks up a faint signal — rhythmic, deliberate, almost like Morse code."
     },
-
     {
       "id": "enc_los_alamos_lab_alarm",
       "poi": "Los Alamos Lab",
@@ -93,7 +86,6 @@
       "trigger": "repeat_visit",
       "dialog": "A terminal hums softly. The screen flashes: \"CORE TEMPERATURE: RISING\"."
     },
-
     {
       "id": "enc_chernobyl_pripyat_echo",
       "poi": "Chernobyl Pripyat",
@@ -106,7 +98,6 @@
       "trigger": "repeat_visit",
       "dialog": "A figure stands in a window for a moment — then vanishes when you blink."
     },
-
     {
       "id": "enc_fukushima_daiichi_warning",
       "poi": "Fukushima Daiichi",
@@ -119,7 +110,6 @@
       "trigger": "repeat_visit",
       "dialog": "A deep rumble shakes the ground. Something beneath the reactor is still alive."
     },
-
     {
       "id": "enc_black_mountain_broadcast",
       "poi": "Black Mountain",
@@ -132,26 +122,41 @@
       "trigger": "repeat_visit",
       "dialog": "The static forms a voice — faint, broken, familiar. Jax?"
     },
-
     {
       "id": "enc_goodsprings_saloon_note",
       "poi": "Goodsprings Saloon",
       "trigger": "first_visit",
       "dialog": "A scrap of paper sits on the bar: \"DON'T TOUCH THE HUMMING CRATE — SPARKPLUG\"."
     },
-
+    {
+      "id": "enc_goodsprings_saloon_rumor",
+      "poi": "Goodsprings Saloon",
+      "trigger": "repeat_visit",
+      "dialog": "A drunk mutters about a hidden stash under the floorboards — might be worth a look."
+    },
     {
       "id": "enc_nipton_trading_post_smoke",
       "poi": "Nipton Trading Post",
       "trigger": "first_visit",
       "dialog": "Smoke rises from behind the building. Something was burned recently."
     },
-
+    {
+      "id": "enc_nipton_trading_post_ashes",
+      "poi": "Nipton Trading Post",
+      "trigger": "repeat_visit",
+      "dialog": "The ashes reveal a melted pre-war lockbox. Could be loot inside."
+    },
     {
       "id": "enc_freeside_market_whisper",
       "poi": "Freeside Market",
-      "trigger": "repeat_visit",
+      "trigger": "first_visit",
       "dialog": "A merchant whispers: \"Someone’s buying up pre-war tech. Paying in caps and silence.\""
+    },
+    {
+      "id": "enc_freeside_market_deal",
+      "poi": "Freeside Market",
+      "trigger": "repeat_visit",
+      "dialog": "The merchant offers a deal: a rare Pip-Boy mod for 200 CAPS."
     }
   ]
 }
