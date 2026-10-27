@@ -185,6 +185,9 @@ test("declare_id matches Anchor.toml", () => {
   const anchorSrc = fs.readFileSync(path.join(root, "Anchor.toml"), "utf8");
   const result = checkDeclareIds(libSrc, anchorSrc);
   assert.equal(result.declared.localnet, golden.program_id);
+  const ids = [result.declared.localnet, result.declared.devnet, result.declared.mainnet];
+  assert.equal(new Set(ids).size, 3);
+  assert.notEqual(result.anchor.mainnet, result.anchor.devnet);
   assert.throws(() => checkDeclareIds(libSrc.replaceAll(golden.program_id, "11111111111111111111111111111111"), anchorSrc));
 });
 

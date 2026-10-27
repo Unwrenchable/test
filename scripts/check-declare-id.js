@@ -6,7 +6,7 @@ const path = require("path");
 const FEATURE_TO_ANCHOR = {
   localnet: "localnet",
   devnet: "devnet",
-  mainnet: "mainnet-beta",
+  mainnet: "mainnet",
 };
 
 function parseDeclareIds(src) {

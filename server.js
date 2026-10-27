@@ -23,10 +23,16 @@ const {
 } = require('@solana/spl-token');
 const { Metaplex } = require('@metaplex-foundation/js');
 const {
-  buildClaimFromRequest,
   CLUSTER_TAG,
   MAX_VOUCHER_TTL_SECS,
 } = require('./lib/voucherV1');
+const {
+  DEFAULT_DOMAIN,
+  DEFAULT_RADIUS_METERS,
+  authorizeClaim,
+  corsAllowlist,
+  issueNonce,
+} = require('./lib/claimAuth');
 
 // === Config & Validation ===
 const requiredEnv = [
@@ -78,6 +84,16 @@ const connection = new Connection(SOLANA_RPC, 'confirmed');
 const MINT_PUBKEY = new PublicKey(TOKEN_MINT);
 const GAME_VAULT = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(GAME_VAULT_SECRET)));
 const COOLDOWN = Number(COOLDOWN_SECONDS);
+if (!Number.isInteger(COOLDOWN) || COOLDOWN <= 0) {
+  console.error('COOLDOWN_SECONDS must be a positive integer');
+  process.exit(1);
+}
+const SIWS_DOMAIN = process.env.SIWS_DOMAIN || DEFAULT_DOMAIN;
+const CLAIM_RADIUS_METERS = Number(process.env.CLAIM_RADIUS_METERS || DEFAULT_RADIUS_METERS);
+if (!Number.isFinite(CLAIM_RADIUS_METERS) || CLAIM_RADIUS_METERS <= 0) {
+  console.error('CLAIM_RADIUS_METERS must be a positive number');
+  process.exit(1);
+}
 const redis = new Redis(REDIS_URL);
 
 redis.on('error', (err) => console.error('Redis error:', err));
@@ -124,13 +140,32 @@ app.use(helmet({
     },
   },
 }));
-app.use(cors());
+const corsAllowed = new Set(corsAllowlist(process.env.CORS_ORIGINS));
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && !corsAllowed.has(origin)) {
+    return res.status(403).json({ error: 'origin' });
+  }
+  next();
+});
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || corsAllowed.has(origin)) callback(null, true);
+    else callback(null, false);
+  },
+}));
 app.use(express.json({ limit: '100kb' }));
 
 const globalLimiter = rateLimit({ windowMs: 60_000, max: 200 });
 const actionLimiter = rateLimit({ windowMs: 60_000, max: 20 });
+// Default key is the client IP. /api/terminal-reward is the live route.
+const claimIpLimiter = rateLimit({ windowMs: 60_000, max: 10 });
 app.use(globalLimiter);
-app.use(['/find-loot', '/shop', '/battle', '/terminal-reward', '/claim-voucher'], actionLimiter);
+app.use(
+  ['/find-loot', '/shop', '/battle', '/api/terminal-reward', '/claim-voucher', '/claim-nonce'],
+  actionLimiter,
+);
+app.use(['/claim-voucher', '/claim-nonce'], claimIpLimiter);
 
 // === Static & API Routes ===
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -198,46 +233,52 @@ app.post('/battle', [
   // ... keep your existing battle logic
 });
 
-// === NEW: Claim Loot Voucher Endpoint ===
+// === SIWS nonce. Redis TTL is 120s. claim-voucher consumes it with GETDEL. ===
+app.post('/claim-nonce', async (_req, res) => {
+  try {
+    const issued = await issueNonce(redis, { domain: SIWS_DOMAIN });
+    res.json(issued);
+  } catch {
+    console.warn('claim-nonce rejected');
+    res.status(500).json({ error: 'nonce' });
+  }
+});
+
+// Wallet, loot id, hint, and coordinates in the body are not trusted.
+// The signed SIWS message supplies wallet, loot_id, and nonce. The server
+// looks the hint and coordinates up from locations.json.
 app.post('/claim-voucher', [
-  body('wallet').isString().notEmpty(),
-  body('loot_id').custom((value) => {
-    if (!/^\d+$/.test(String(value))) throw new Error('loot_id');
-    if (BigInt(value) > 18446744073709551615n) throw new Error('loot_id');
-    return true;
-  }),
+  body('message').isString().isLength({ min: 1, max: 512 }),
+  body('signature').isString().notEmpty(),
   body('latitude').isFloat({ min: -90, max: 90 }),
   body('longitude').isFloat({ min: -180, max: 180 }),
-  body('location_hint').isString().notEmpty(),
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-  // Player binding uses `wallet` only. Body fields `player` and `timestamp` are ignored.
-  const { wallet, loot_id, latitude, longitude, location_hint } = req.body;
-
-  try { new PublicKey(wallet); } catch { return res.status(400).json({ error: 'Invalid wallet' }); }
-
-  const lastClaim = await redis.get(`claim_cooldown:${wallet}`);
-  if (lastClaim && Date.now() - Number(lastClaim) < COOLDOWN * 1000) {
-    return res.status(429).json({ error: 'Cooldown active' });
-  }
-
   let issued;
   try {
-    issued = buildClaimFromRequest(req.body, {
+    issued = await authorizeClaim({
+      redis,
+      message: req.body.message,
+      signature: req.body.signature,
+      latitude: Number(req.body.latitude),
+      longitude: Number(req.body.longitude),
+      locations: LOCATIONS,
+      nowSeconds: Math.floor(Date.now() / 1000),
+      domain: SIWS_DOMAIN,
+      radiusMeters: CLAIM_RADIUS_METERS,
+      cooldownSeconds: COOLDOWN,
       cluster: SOLANA_CLUSTER,
       programId: FIZZCAPS_PROGRAM_ID,
-      nowSeconds: Math.floor(Date.now() / 1000),
       ttlSeconds: voucherTtl,
       secretKey: serverKeypair.secretKey,
     });
-  } catch {
+  } catch (err) {
+    if (err && err.status) return res.status(err.status).json({ error: err.code });
     console.warn('claim-voucher rejected');
     return res.status(400).json({ error: 'Invalid voucher request' });
   }
-
-  await redis.set(`claim_cooldown:${wallet}`, Date.now());
 
   // ed25519Message is for the client to build the precompile instruction.
   // claim_loot rebuilds the message and rejects a mismatch. Do not log it.

@@ -4,20 +4,52 @@ on:
   pull_request:
   push:
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.99.1
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: 1.99.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
           cache: npm
       - run: npm ci
       - run: node scripts/check-declare-id.js
       - run: bash scripts/check-cluster-features.sh
-      - run: cargo test -p fizzcaps_onchain --lib
-      - run: cargo check -p fizzcaps_onchain --lib --no-default-features --features devnet
-      - run: cargo check -p fizzcaps_onchain --lib --no-default-features --features mainnet
-      - run: node --test tests/voucherV1.test.js
+      - run: cargo test -p fizzcaps_onchain --lib --no-default-features --features localnet
+      - run: cargo test -p fizzcaps_onchain --lib --no-default-features --features devnet
+      - run: cargo test -p fizzcaps_onchain --lib --no-default-features --features mainnet
+      - run: node --test tests/voucherV1.test.js tests/claimAuth.test.js
+      - name: Install Solana CLI 2.3.0
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v2.3.0/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+      - name: Install Anchor CLI 0.32.1
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/anchor" -L "https://github.com/coral-xyz/anchor/releases/download/v0.32.1/anchor-0.32.1-x86_64-unknown-linux-gnu"
+          chmod +x "$HOME/.local/bin/anchor"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Build SBF
+        run: |
+          # scripts/cargo-build-sbf forces platform-tools v1.58. The CLI default
+          # (v1.48 / rustc 1.84.1) cannot parse edition2024 dependencies.
+          export PATH="$GITHUB_WORKSPACE/scripts:$PATH"
+          cargo-build-sbf \
+            --manifest-path programs/fizzcaps-onchain/Cargo.toml \
+            --no-default-features --features localnet -- --locked
+          anchor build -- --no-default-features --features localnet
+      - name: Local validator claim flow
+        run: cargo test -p fizzcaps_onchain --test claim_flow --no-default-features --features localnet -- --nocapture
+      - name: Anchor local validator
+        run: |
+          mkdir -p "$HOME/.config/solana"
+          solana-keygen new --no-bip39-passphrase --force -o "$HOME/.config/solana/id.json"
+          export PATH="$GITHUB_WORKSPACE/scripts:$PATH"
+          anchor test --skip-build

@@ -5,7 +5,9 @@ use anchor_spl::{
     token::{burn, Burn, Mint, MintTo, Token, TokenAccount},
 };
 use mpl_token_metadata::{
-    instructions::CreateV1CpiBuilder, types::TokenStandard, ID as METADATA_PROGRAM_ID,
+    instructions::CreateV1CpiBuilder,
+    types::{PrintSupply, TokenStandard},
+    ID as METADATA_PROGRAM_ID,
 };
 
 mod admin;
@@ -30,11 +32,10 @@ compile_error!("exactly one of the `localnet`, `devnet`, or `mainnet` features m
 #[cfg(feature = "localnet")]
 declare_id!("GDGexnGtZPoD1aHv6qg8hjeSspujwWnxJCtdrrj2gKpP");
 #[cfg(feature = "devnet")]
-declare_id!("GDGexnGtZPoD1aHv6qg8hjeSspujwWnxJCtdrrj2gKpP");
+declare_id!("35LPiBoJFQmxhWW7sA1rZzN3yZ5zK6NcSj3cCmub4961");
 #[cfg(feature = "mainnet")]
-declare_id!("GDGexnGtZPoD1aHv6qg8hjeSspujwWnxJCtdrrj2gKpP");
+declare_id!("3ZW9YUd1cEYnxRm8vwef71QfETgMGVZMF3zXM8xMQ6ht");
 
-const CAPS_MINT_SEEDS: &[u8] = b"caps-mint";
 const LOOT_MINT_AUTHORITY_SEEDS: &[u8] = b"loot-mint-auth";
 const FIZZ_CONFIG_SEEDS: &[u8] = b"fizz-config";
 
@@ -53,6 +54,10 @@ pub mod fizzcaps_onchain {
             &ctx.accounts.authority.key(),
         )?;
         require!(server_key != Pubkey::default(), ErrorCode::InvalidServerKey);
+        require!(
+            ctx.accounts.caps_mint.decimals == 9,
+            ErrorCode::InvalidCapsDecimals
+        );
 
         let cfg = &mut ctx.accounts.config;
         cfg.authority = ctx.accounts.authority.key();
@@ -162,6 +167,7 @@ pub mod fizzcaps_onchain {
             .sysvar_instructions(&instructions_sysvar)
             .spl_token_program(Some(&token_program))
             .token_standard(TokenStandard::NonFungible)
+            .print_supply(PrintSupply::Zero)
             .name(name)
             .symbol("FIZZLOOT".to_string())
             .uri(uri)
@@ -224,7 +230,10 @@ pub struct FizzInit<'info> {
     )]
     pub config: Account<'info, FizzConfig>,
 
-    #[account(seeds = [CAPS_MINT_SEEDS], bump)]
+    /// Existing SPL mint chosen by the upgrade authority. Nothing in this
+    /// program creates it. Decimals are fixed at 9 so the 100 CAPS fee is
+    /// `100 * 10^9` base units.
+    #[account(constraint = caps_mint.decimals == 9 @ ErrorCode::InvalidCapsDecimals)]
     pub caps_mint: Account<'info, Mint>,
 
     pub system_program: Program<'info, System>,
@@ -257,9 +266,8 @@ pub struct ClaimLoot<'info> {
 
     #[account(
         mut,
-        seeds = [CAPS_MINT_SEEDS],
-        bump,
         address = config.caps_mint @ ErrorCode::InvalidCapsMint,
+        constraint = caps_mint.decimals == 9 @ ErrorCode::InvalidCapsDecimals,
     )]
     pub caps_mint: Account<'info, Mint>,
 
@@ -275,11 +283,13 @@ pub struct ClaimLoot<'info> {
         payer = player,
         mint::decimals = 0,
         mint::authority = loot_mint_authority,
+        // Metaplex CreateV1 rejects a non-fungible whose freeze authority is unset.
+        mint::freeze_authority = loot_mint_authority,
     )]
     pub loot_mint: Account<'info, Mint>,
 
     #[account(
-        init_if_needed,
+        init,
         payer = player,
         associated_token::mint = loot_mint,
         associated_token::authority = player,
@@ -392,4 +402,6 @@ pub enum ErrorCode {
     InvalidProgramData,
     #[msg("Server key is missing")]
     InvalidServerKey,
+    #[msg("caps mint must use 9 decimals")]
+    InvalidCapsDecimals,
 }

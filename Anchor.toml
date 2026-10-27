@@ -4,36 +4,43 @@ skip-lint = false
 
 # These ids must match the feature-gated declare_id! in
 # programs/fizzcaps-onchain/src/lib.rs. scripts/check-declare-id.js enforces that.
-# This variant currently uses one program id. Cluster separation is the voucher
-# cluster_tag (localnet=3, devnet=2, mainnet=1), not a second pubkey.
-# Do not run `anchor keys sync` before a build; it rewrites declare_id!.
+# Each cluster has its own program id. Do not run `anchor keys sync`; it rewrites
+# declare_id! and collapses the clusters back onto one key.
 
 [programs.localnet]
 fizzcaps_onchain = "GDGexnGtZPoD1aHv6qg8hjeSspujwWnxJCtdrrj2gKpP"
 
 [programs.devnet]
-fizzcaps_onchain = "GDGexnGtZPoD1aHv6qg8hjeSspujwWnxJCtdrrj2gKpP"
+fizzcaps_onchain = "35LPiBoJFQmxhWW7sA1rZzN3yZ5zK6NcSj3cCmub4961"
 
-[programs.mainnet-beta]
-fizzcaps_onchain = "GDGexnGtZPoD1aHv6qg8hjeSspujwWnxJCtdrrj2gKpP"
+[programs.mainnet]
+fizzcaps_onchain = "3ZW9YUd1cEYnxRm8vwef71QfETgMGVZMF3zXM8xMQ6ht"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
 cluster = "localnet"
-wallet = "~/.config/solana/id.json"  # Change if your wallet is elsewhere
+wallet = "~/.config/solana/id.json"
 
 [test]
-startup_wait = 5000
+startup_wait = 10000
 shutdown_wait = 2000
-
-[test.validator]
-url = "https://api.devnet.solana.com"
+# Workspace programs load through the upgradeable loader. The provider wallet
+# is the upgrade authority, which is what fizz_init has to prove.
+upgradeable = true
 
 [[test.genesis]]
-path = "target/deploy/fizzcaps_onchain.so"
-balance = 1000000000000
+address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+program = "tests/fixtures/mpl_token_metadata.so"
+upgradeable = true
 
 [scripts]
-test = "yarn install && yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+# Node 22 type-strips .ts before ts-mocha can compile it. Node 20 does not
+# know that flag, so only export it when this runtime accepts it.
+test = """
+if node --no-experimental-strip-types -e 0 >/dev/null 2>&1; then
+  export NODE_OPTIONS="${NODE_OPTIONS:-} --no-experimental-strip-types"
+fi
+npx ts-mocha -p ./tsconfig.json -t 1000000 "tests/**/*.ts"
+"""

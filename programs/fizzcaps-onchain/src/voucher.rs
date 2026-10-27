@@ -317,15 +317,6 @@ mod tests {
         expect_code(ensure_claims_open(true), ErrorCode::Paused);
     }
 
-    #[test]
-    fn replay_seeds_are_per_voucher_and_per_loot() {
-        let a = [1u8; 16];
-        let b = [2u8; 16];
-        assert_ne!(a.as_slice(), b.as_slice());
-        assert_eq!(1u64.to_le_bytes(), 1u64.to_le_bytes());
-        assert_ne!(1u64.to_le_bytes(), 2u64.to_le_bytes());
-    }
-
     fn decode_hex(s: &str) -> Vec<u8> {
         (0..s.len())
             .step_by(2)
@@ -349,7 +340,6 @@ mod tests {
         let fixture: serde_json::Value = serde_json::from_str(raw).unwrap();
         let program = Pubkey::from_str(fixture["program_id"].as_str().unwrap()).unwrap();
         let player = Pubkey::from_str(fixture["player"].as_str().unwrap()).unwrap();
-        assert_eq!(crate::ID.to_string(), fixture["program_id"].as_str().unwrap());
         let mut voucher_id = [0u8; 16];
         voucher_id.copy_from_slice(&decode_hex(fixture["voucher_id_hex"].as_str().unwrap()));
         let voucher = LootVoucherV1 {
@@ -364,9 +354,11 @@ mod tests {
         let msg = voucher.message(&program, &player);
         let got = encode_hex(&msg);
         if cfg!(feature = "localnet") {
+            assert_eq!(crate::ID.to_string(), fixture["program_id"].as_str().unwrap());
             assert_eq!(CLUSTER_TAG, 3);
             assert_eq!(got, fixture["message_hex"].as_str().unwrap());
         } else {
+            assert_ne!(crate::ID.to_string(), fixture["program_id"].as_str().unwrap());
             assert_ne!(got, fixture["message_hex"].as_str().unwrap());
             assert_eq!(msg[24], CLUSTER_TAG);
         }
@@ -688,19 +680,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn claim_handler_wires_the_security_checks() {
-        let src = include_str!("lib.rs");
-        assert!(src.contains("ensure_claims_open(ctx.accounts.config.paused)"));
-        assert!(src.contains("&ctx.accounts.config.server_key"));
-        assert!(src.contains("ctx.accounts.player.key()"));
-        assert!(src.contains("VOUCHER_CLAIM_SEED"));
-        assert!(src.contains("LOOT_CLAIM_SEED"));
-        assert!(src.contains("assert_upgrade_authority"));
-        assert!(!src.contains("fn verify_ed25519_signature"));
-        assert!(!src.contains("pub server_key: AccountInfo"));
-        assert!(!src.contains("pub server_key: UncheckedAccount"));
-        assert!(src.contains("pub server_key: Pubkey"));
-        assert!(!src.contains("latitude: f64"));
-    }
 }

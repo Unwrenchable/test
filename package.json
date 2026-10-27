@@ -8,7 +8,7 @@
     "dev": "nodemon server.js",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test": "node --test tests/voucherV1.test.js"
+    "test": "node --test tests/voucherV1.test.js tests/claimAuth.test.js"
   },
   "keywords": [
     "solana",
@@ -44,10 +44,17 @@
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.7",
-    "prettier": "^3.3.3",
+    "@types/chai": "^4.3.20",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.19.1",
+    "chai": "^4.5.0",
     "eslint": "^9.13.0",
     "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-node": "^11.1.0"
+    "eslint-plugin-node": "^11.1.0",
+    "mocha": "^10.8.2",
+    "nodemon": "^3.1.7",
+    "prettier": "^3.3.3",
+    "ts-mocha": "^10.1.0",
+    "typescript": "^5.9.3"
   }
 }
