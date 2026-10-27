@@ -1,0 +1,28 @@
+#!/bin/sh
+# Agave CLI 2.3.0 ships platform-tools v1.48 (rustc 1.84.1). That rustc cannot
+# parse the edition2024 crates this program depends on. platform-tools v1.58 can.
+# `anchor build` runs `cargo build-sbf`, which resolves this file when `scripts/`
+# is ahead of the Solana CLI on PATH.
+set -eu
+real="${SOLANA_CARGO_BUILD_SBF:-$HOME/.local/share/solana/install/active_release/bin/cargo-build-sbf}"
+if [ ! -x "$real" ]; then
+  echo "cargo-build-sbf not found at $real" >&2
+  exit 127
+fi
+lead=
+if [ "${1:-}" = "build-sbf" ]; then
+  lead=build-sbf
+  shift
+fi
+case " $* " in
+  *" --tools-version "*|*" --tools-version="*)
+    if [ -n "$lead" ]; then
+      exec "$real" "$lead" "$@"
+    fi
+    exec "$real" "$@"
+    ;;
+esac
+if [ -n "$lead" ]; then
+  exec "$real" "$lead" --force-tools-install --tools-version v1.58 "$@"
+fi
+exec "$real" --force-tools-install --tools-version v1.58 "$@"

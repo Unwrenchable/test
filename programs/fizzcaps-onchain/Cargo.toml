@@ -1,7 +1,7 @@
 [package]
 name = "fizzcaps_onchain"
 version = "0.1.0"
-description = "Atomic Fizz Caps — $CAPS token + real-world loot NFT claims"
+description = "Atomic Fizz Caps variant — Ed25519 loot vouchers"
 edition = "2021"
 
 [lib]
@@ -9,13 +9,28 @@ crate-type = ["cdylib", "lib"]
 name = "fizzcaps_onchain"
 
 [features]
+default = []
+localnet = []
+devnet = []
+mainnet = []
 no-entrypoint = []
 no-idl = []
+no-log-ix-name = []
 cpi = ["no-entrypoint"]
-default = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 
 [dependencies]
 anchor-lang = "0.32.1"
 anchor-spl = "0.32.1"
-mpl-token-metadata = { version = "5.1.1", features = ["no-entrypoint"] }
-solana-program = "~2.0"
+mpl-token-metadata = "5.1.1"
+solana-program = "2.3.0"
+
+[dev-dependencies]
+bincode = "1.3.3"
+serde_json = "1"
+sha2 = "0.10"
+solana-program-test = "2.3.0"
+solana-sdk = "2.3.0"
+spl-associated-token-account = { version = "7.0.0", features = ["no-entrypoint"] }
+spl-token = { version = "8.0.0", features = ["no-entrypoint"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

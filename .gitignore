@@ -1,0 +1,8 @@
+/target
+/node_modules
+.anchor
+**/*.so
+!tests/fixtures/mpl_token_metadata.so
+.DS_Store
+.env
+*.log
