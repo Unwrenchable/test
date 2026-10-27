@@ -1,5 +1,9 @@
 # Atomic Fizz Caps 🥤☢️
 
+> **Canonical program:** [Unwrenchable/ATOMIC-FIZZ-CAPS-VAULT-77-WASTELAND-GPS](https://github.com/Unwrenchable/ATOMIC-FIZZ-CAPS-VAULT-77-WASTELAND-GPS).
+> This repository is a **variant**. Its `fizzcaps_onchain` program id is `GDGexnGtZPoD1aHv6qg8hjeSspujwWnxJCtdrrj2gKpP`.
+> Fixes here are not a deployment of the canonical program, and nothing in this tree should be merged or deployed without a separate review.
+
 **A Fallout-inspired real-world geo-location adventure game powered by Solana blockchain.**
 
 Explore the Mojave Wasteland in real life: Use your phone's GPS to hunt for iconic Fallout locations (Hoover Dam, New Vegas Strip, hidden vaults, irradiated sites), claim loot when close enough, earn **CAPS** (in-game currency), accumulate radiation, level up, and mint rewards via your Phantom wallet.
@@ -17,6 +21,29 @@ Play now:(https://atomicfizzcaps.xyz/)
 - **Scavenger's Exchange**: Shop for NFTs/CAPS using in-game currency or direct SOL payments (QR code support).
 - **Solana Integration**: Phantom wallet connect, signed messages for claims/purchases.
 - **Progression**: Level up, manage radiation, collect gear.
+
+## On-chain variant (`programs/fizzcaps-onchain`)
+
+`claim_loot` rebuilds a 169-byte `LootVoucherV1` message and checks the Ed25519 precompile instruction immediately before it. The signer must be `FizzConfig.server_key`. The player, program id, and cluster tag are inside that message. Replay is two PDAs: `voucher-claim` (one per `voucher_id`) and `loot-claim` (one per `loot_id`). A second use fails with the system program's "already in use". Each claim also pays rent for both accounts.
+
+`fizz_init` can only be signed by the program's upgrade authority. The instruction reads the upgradeable loader's `ProgramData` account (seeds `[program id]`, loader `BPFLoaderUpgradeab1e...`) and rejects every other signer. `fizz_set_paused(true)` stops claims. `fizz_set_server_key` rotates the voucher signer; it is signed by `config.authority` (the upgrade authority recorded at init).
+
+Vouchers live at most **300 seconds** (`issued_at` / `expires_at`). The backend draws `voucher_id` from `crypto.randomBytes(16)`.
+
+Build one cluster feature at a time (`localnet` is the default). `devnet` and `mainnet` need `--no-default-features`. Enabling zero or two or more features is a compile error. `node scripts/check-declare-id.js` checks that each `declare_id!` matches `Anchor.toml`.
+
+Required server env for `/claim-voucher`: `SOLANA_CLUSTER` (`localnet`, `devnet`, or `mainnet-beta`) and `FIZZCAPS_PROGRAM_ID`. Optional `VOUCHER_TTL_SECONDS` is clamped to 300. The client puts `Ed25519Program.createInstructionWithPublicKey` (default instruction index `0xffff`) immediately before `claim_loot`.
+
+Server-key rotation: generate a fresh Ed25519 key that has never lived in `.env`, CI, or logs; call `fizz_set_server_key` as `config.authority`; then point the backend at the new secret. Old vouchers stop verifying immediately. The caps-mint PDA (`seeds = ["caps-mint"]`) must already exist before `fizz_init`.
+
+```bash
+node scripts/check-declare-id.js
+bash scripts/check-cluster-features.sh
+cargo test -p fizzcaps_onchain --lib
+cargo check -p fizzcaps_onchain --lib --no-default-features --features devnet
+cargo check -p fizzcaps_onchain --lib --no-default-features --features mainnet
+node --test tests/voucherV1.test.js
+```
 
 ## 🛠️ Tech Stack
 

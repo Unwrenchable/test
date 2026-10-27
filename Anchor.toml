@@ -2,14 +2,20 @@
 seeds = false
 skip-lint = false
 
+# These ids must match the feature-gated declare_id! in
+# programs/fizzcaps-onchain/src/lib.rs. scripts/check-declare-id.js enforces that.
+# This variant currently uses one program id. Cluster separation is the voucher
+# cluster_tag (localnet=3, devnet=2, mainnet=1), not a second pubkey.
+# Do not run `anchor keys sync` before a build; it rewrites declare_id!.
+
 [programs.localnet]
-fizzcaps_onchain = "GDGexnGtZPoD1aHv6qg8hjeSspujwWnxJCtdrrj2gKpP"  # Temporary — will update after first build
+fizzcaps_onchain = "GDGexnGtZPoD1aHv6qg8hjeSspujwWnxJCtdrrj2gKpP"
 
 [programs.devnet]
-fizzcaps_onchain = "ReplaceWithYourDevnetProgramIDAfterDeploy"
+fizzcaps_onchain = "GDGexnGtZPoD1aHv6qg8hjeSspujwWnxJCtdrrj2gKpP"
 
 [programs.mainnet-beta]
-fizzcaps_onchain = "ReplaceWithYourMainnetProgramIDAfterDeploy"
+fizzcaps_onchain = "GDGexnGtZPoD1aHv6qg8hjeSspujwWnxJCtdrrj2gKpP"
 
 [registry]
 url = "https://api.apr.dev"

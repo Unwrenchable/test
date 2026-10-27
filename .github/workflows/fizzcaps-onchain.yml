@@ -1,0 +1,23 @@
+name: fizzcaps-onchain
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: node scripts/check-declare-id.js
+      - run: bash scripts/check-cluster-features.sh
+      - run: cargo test -p fizzcaps_onchain --lib
+      - run: cargo check -p fizzcaps_onchain --lib --no-default-features --features devnet
+      - run: cargo check -p fizzcaps_onchain --lib --no-default-features --features mainnet
+      - run: node --test tests/voucherV1.test.js

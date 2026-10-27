@@ -1,0 +1,14 @@
+{
+  "program_id": "GDGexnGtZPoD1aHv6qg8hjeSspujwWnxJCtdrrj2gKpP",
+  "player": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+  "voucher_id_hex": "00112233445566778899aabbccddeeff",
+  "loot_id": 42,
+  "lat_e6": 36012345,
+  "lng_e6": -115139000,
+  "location_hint": "vault-77",
+  "issued_at": 1760000000,
+  "expires_at": 1760000300,
+  "cluster": "localnet",
+  "cluster_tag": 3,
+  "message_hex": "46495a5a434150533a4c4f4f545f564f55434845523a763103e203f9665b29fdf88c45c19ced9ab0d179f0bc8e782b052784abd498fe6af76c6752055c20b3e9d8746656ddf73855507f87ab6d87523e4c76a7fa36096a99eb00112233445566778899aabbccddeeff2a0000000000000039812502481e23f95ef0dae976cad35d098d4fdc7b49b14f8cda74f013ca113a36e7a1fece6f55c30078e768000000002c79e76800000000"
+}

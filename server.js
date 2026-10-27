@@ -22,9 +22,22 @@ const {
   createTransferInstruction,
 } = require('@solana/spl-token');
 const { Metaplex } = require('@metaplex-foundation/js');
+const {
+  buildClaimFromRequest,
+  CLUSTER_TAG,
+  MAX_VOUCHER_TTL_SECS,
+} = require('./lib/voucherV1');
 
 // === Config & Validation ===
-const requiredEnv = ['SOLANA_RPC', 'TOKEN_MINT', 'GAME_VAULT_SECRET', 'REDIS_URL', 'SERVER_SECRET_KEY'];
+const requiredEnv = [
+  'SOLANA_RPC',
+  'TOKEN_MINT',
+  'GAME_VAULT_SECRET',
+  'REDIS_URL',
+  'SERVER_SECRET_KEY',
+  'SOLANA_CLUSTER',
+  'FIZZCAPS_PROGRAM_ID',
+];
 const missing = requiredEnv.filter(v => !process.env[v]);
 if (missing.length > 0) {
   console.error(`Missing required env vars: ${missing.join(', ')}`);
@@ -37,9 +50,29 @@ const {
   GAME_VAULT_SECRET,
   REDIS_URL,
   SERVER_SECRET_KEY,        // 64-byte base58 secret key for Ed25519 signing
+  SOLANA_CLUSTER,
+  FIZZCAPS_PROGRAM_ID,
   PORT = 3000,
   COOLDOWN_SECONDS = 60,
 } = process.env;
+
+if (!CLUSTER_TAG[SOLANA_CLUSTER]) {
+  console.error('SOLANA_CLUSTER must be mainnet-beta, devnet, or localnet');
+  process.exit(1);
+}
+try {
+  // Validate before any voucher is signed. The program id is bound into the message.
+  new PublicKey(FIZZCAPS_PROGRAM_ID);
+} catch {
+  console.error('FIZZCAPS_PROGRAM_ID is not a valid pubkey');
+  process.exit(1);
+}
+let voucherTtl = Number(process.env.VOUCHER_TTL_SECONDS || MAX_VOUCHER_TTL_SECS);
+if (!Number.isFinite(voucherTtl) || voucherTtl <= 0) {
+  console.error('VOUCHER_TTL_SECONDS must be a positive number');
+  process.exit(1);
+}
+if (voucherTtl > MAX_VOUCHER_TTL_SECS) voucherTtl = MAX_VOUCHER_TTL_SECS;
 
 const connection = new Connection(SOLANA_RPC, 'confirmed');
 const MINT_PUBKEY = new PublicKey(TOKEN_MINT);
@@ -168,83 +201,56 @@ app.post('/battle', [
 // === NEW: Claim Loot Voucher Endpoint ===
 app.post('/claim-voucher', [
   body('wallet').isString().notEmpty(),
-  body('loot_id').isInt({ min: 1 }),
-  body('latitude').isFloat(),
-  body('longitude').isFloat(),
-  body('timestamp').isInt(),
+  body('loot_id').custom((value) => {
+    if (!/^\d+$/.test(String(value))) throw new Error('loot_id');
+    if (BigInt(value) > 18446744073709551615n) throw new Error('loot_id');
+    return true;
+  }),
+  body('latitude').isFloat({ min: -90, max: 90 }),
+  body('longitude').isFloat({ min: -180, max: 180 }),
   body('location_hint').isString().notEmpty(),
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-  const { wallet, loot_id, latitude, longitude, timestamp, location_hint } = req.body;
+  // Player binding uses `wallet` only. Body fields `player` and `timestamp` are ignored.
+  const { wallet, loot_id, latitude, longitude, location_hint } = req.body;
 
   try { new PublicKey(wallet); } catch { return res.status(400).json({ error: 'Invalid wallet' }); }
 
-  // Optional: cooldown check
   const lastClaim = await redis.get(`claim_cooldown:${wallet}`);
   if (lastClaim && Date.now() - Number(lastClaim) < COOLDOWN * 1000) {
     return res.status(429).json({ error: 'Cooldown active' });
   }
 
-  // === Serialize voucher exactly like Anchor expects ===
-  const message = serializeLootVoucher({
-    loot_id: Number(loot_id),
-    latitude,
-    longitude,
-    timestamp: Number(timestamp),
-    location_hint,
-  });
-
-  // === Sign with server Ed25519 key ===
-  const signature = nacl.sign.detached(message, serverKeypair.secretKey);
+  let issued;
+  try {
+    issued = buildClaimFromRequest(req.body, {
+      cluster: SOLANA_CLUSTER,
+      programId: FIZZCAPS_PROGRAM_ID,
+      nowSeconds: Math.floor(Date.now() / 1000),
+      ttlSeconds: voucherTtl,
+      secretKey: serverKeypair.secretKey,
+    });
+  } catch {
+    console.warn('claim-voucher rejected');
+    return res.status(400).json({ error: 'Invalid voucher request' });
+  }
 
   await redis.set(`claim_cooldown:${wallet}`, Date.now());
 
+  // ed25519Message is for the client to build the precompile instruction.
+  // claim_loot rebuilds the message and rejects a mismatch. Do not log it.
   res.json({
-    success: true,
-    voucher: {
-      loot_id: Number(loot_id),
-      latitude,
-      longitude,
-      timestamp: Number(timestamp),
-      location_hint,
-      server_signature: Array.from(signature),
-    },
-    server_pubkey: SERVER_PUBKEY,
+    ok: true,
+    voucher: issued.voucher,
+    signature: issued.signature.toString('base64'),
+    ed25519Message: issued.message.toString('base64'),
+    serverPubkey: SERVER_PUBKEY,
+    programId: issued.programId,
+    cluster: issued.cluster,
   });
 });
-
-// === Helper: Manual Borsh-like serialization to match Anchor ===
-function serializeLootVoucher(v) {
-  const buf = Buffer.alloc(200);
-  let offset = 0;
-
-  // u64 loot_id
-  buf.writeBigUInt64LE(BigInt(v.loot_id), offset);
-  offset += 8;
-
-  // f64 latitude
-  buf.writeDoubleLE(v.latitude, offset);
-  offset += 8;
-
-  // f64 longitude
-  buf.writeDoubleLE(v.longitude, offset);
-  offset += 8;
-
-  // i64 timestamp
-  buf.writeBigInt64LE(BigInt(v.timestamp), offset);
-  offset += 8;
-
-  // string location_hint
-  const hintBytes = Buffer.from(v.location_hint, 'utf8');
-  buf.writeUInt32LE(hintBytes.length, offset);
-  offset += 4;
-  hintBytes.copy(buf, offset);
-  offset += hintBytes.length;
-
-  return buf.slice(0, offset);
-}
 
 // === Catch-all for SPA ===
 app.get('*', (req, res) => {
